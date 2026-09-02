@@ -69,6 +69,9 @@
     overflow-x:auto; font:12.5px/1.55 var(--mono); margin:0 0 14px;
   }
   .hint{color:#7a828c; font-size:0.82rem; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+  details{margin-bottom:10px; border:1px solid var(--line); border-radius:2px; padding:8px 10px;}
+  details summary{cursor:pointer; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:0.86rem; font-weight:600;}
+  details pre{margin-top:10px; margin-bottom:0;}
 </style>
 </head>
 <body>
@@ -116,7 +119,7 @@
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz-vsPECs2MvOW8KzbEvHGNzy_L0SpPUnG7XhoyTrIIncrCNOwEHzE8pOosh60LSz1Qqg/exec';
 const APP_SECRET = 'hYwpG8NtI9SkegrQ'; // must match APP_SHARED_SECRET in Code.gs
 // -----------------------------------------------------------------------
-  
+
 const form = document.getElementById('f');
 const resultEl = document.getElementById('result');
 const submitBtn = document.getElementById('submitBtn');
@@ -169,8 +172,12 @@ form.addEventListener('submit', async (e) => {
 });
 
 function renderResult_(data) {
+  const debugHtml = data.debug ? renderDebug_(data.debug) : '';
   if (!data.succeeded) {
-    renderError_(data.error || 'Unknown error.', data);
+    resultEl.innerHTML = `
+      <div class="card err"><h2>Couldn't update the lead</h2>${escapeHtml_(data.error || 'Unknown error.')}</div>
+      ${debugHtml}
+    `;
     return;
   }
   const dryTag = data.dryRun ? ' <em>(dry run — nothing was sent)</em>' : '';
@@ -181,7 +188,8 @@ function renderResult_(data) {
       <strong>${escapeHtml_(data.matched.lead.name || '')}</strong> (${escapeHtml_(data.matched.lead.contactNo || '')}).<br>
       Status resolved as: <strong>${escapeHtml_((data.matched.statusResolvedAs || []).join(' → '))}</strong>
     </div>
-    <pre>${escapeHtml_(JSON.stringify(data, null, 2))}</pre>
+    <pre>${escapeHtml_(JSON.stringify({ payloadToSend: data.payloadToSend, leadratResponse: data.leadratResponse }, null, 2))}</pre>
+    ${debugHtml}
   `;
 }
 
@@ -190,6 +198,25 @@ function renderError_(message, data) {
     <div class="card err"><h2>Couldn't update the lead</h2>${escapeHtml_(message)}</div>
     ${data ? `<pre>${escapeHtml_(JSON.stringify(data, null, 2))}</pre>` : ''}
   `;
+}
+
+// Shows exactly what Leadrat's API returned at each step (token/user
+// search/lead search/etc.), each collapsed behind its own <details> so
+// you can check "is the API even responding" without wading through one
+// giant blob.
+function renderDebug_(debug) {
+  const steps = Object.keys(debug).map(key => {
+    const step = debug[key];
+    return `
+      <details>
+        <summary>${escapeHtml_(key)}</summary>
+        <pre>${escapeHtml_(JSON.stringify(step, null, 2))}</pre>
+      </details>
+    `;
+  }).join('');
+  return `<div class="card" style="background:#fff;border:1px solid var(--line);">
+    <h2>Raw Leadrat API calls</h2>${steps}
+  </div>`;
 }
 
 function escapeHtml_(str) {
