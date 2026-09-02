@@ -116,7 +116,7 @@
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz-vsPECs2MvOW8KzbEvHGNzy_L0SpPUnG7XhoyTrIIncrCNOwEHzE8pOosh60LSz1Qqg/exec';
 const APP_SECRET = 'hYwpG8NtI9SkegrQ'; // must match APP_SHARED_SECRET in Code.gs
 // -----------------------------------------------------------------------
-
+  
 const form = document.getElementById('f');
 const resultEl = document.getElementById('result');
 const submitBtn = document.getElementById('submitBtn');
@@ -150,12 +150,13 @@ form.addEventListener('submit', async (e) => {
   resultEl.innerHTML = '';
 
   try {
-    // text/plain avoids a CORS preflight against the Apps Script endpoint.
-    const res = await fetch(GAS_WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
+    // Sent as GET with the payload in the query string, not POST-with-body:
+    // Apps Script always 302-redirects (script.google.com ->
+    // script.googleusercontent.com), and fetch() silently downgrades a
+    // POST to GET (dropping the body) when following that redirect. GET
+    // survives the redirect untouched, so we use that instead.
+    const url = GAS_WEB_APP_URL + '?payload=' + encodeURIComponent(JSON.stringify(payload));
+    const res = await fetch(url, { method: 'GET' });
     const data = await res.json();
     statusLine.textContent = '';
     renderResult_(data);
