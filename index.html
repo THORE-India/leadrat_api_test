@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leadrat — Schedule Site Visit updater (test)</title>
+<style>
+  :root{
+    --ink:#1c2126;
+    --paper:#f6f5f2;
+    --line:#d8d4cb;
+    --accent:#2f5d4f;
+    --accent-soft:#e6ede9;
+    --error:#8a2f2f;
+    --error-soft:#f6e9e9;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.5 "Iowan Old Style","Georgia",serif;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:640px; margin:0 auto;}
+  h1{
+    font-size:1.5rem; font-weight:600; margin:0 0 4px;
+    letter-spacing:0.01em;
+  }
+  .sub{color:#5b6470; font-size:0.92rem; margin:0 0 28px; max-width:56ch;}
+  form{
+    background:#fff; border:1px solid var(--line); border-radius:3px;
+    padding:22px 22px 8px;
+  }
+  label{
+    display:block; font-size:0.82rem; text-transform:none; color:#4a5158;
+    margin:0 0 5px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  .field{margin-bottom:16px;}
+  input[type=text], input[type=tel], input[type=datetime-local], textarea{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:2px;
+    font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:#fdfdfc; color:var(--ink);
+  }
+  input:focus, textarea:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  textarea{min-height:64px; resize:vertical;}
+  .row-check{
+    display:flex; align-items:center; gap:8px; margin:4px 0 20px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:0.86rem; color:#4a5158;
+  }
+  .actions{display:flex; gap:10px; padding-bottom:20px;}
+  button{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    font-size:0.9rem; font-weight:600; border-radius:2px; padding:10px 18px;
+    border:1px solid var(--accent); cursor:pointer;
+  }
+  button.primary{background:var(--accent); color:#fff;}
+  button.primary:disabled{opacity:0.55; cursor:default;}
+  button.ghost{background:#fff; color:var(--accent);}
+  .result{margin-top:20px;}
+  .card{
+    border-radius:3px; padding:16px 18px; margin-bottom:14px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; font-size:0.9rem;
+  }
+  .card.ok{background:var(--accent-soft); border:1px solid #b9d0c4;}
+  .card.err{background:var(--error-soft); border:1px solid #d8b6b6; color:var(--error);}
+  .card h2{margin:0 0 6px; font-size:0.95rem;}
+  pre{
+    background:#1c2126; color:#e7e5df; padding:14px 16px; border-radius:3px;
+    overflow-x:auto; font:12.5px/1.55 var(--mono); margin:0 0 14px;
+  }
+  .hint{color:#7a828c; font-size:0.82rem; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Schedule a site visit</h1>
+  <p class="sub">Updates a lead in Leadrat to <strong>Schedule site visit → First Visit</strong>. Only works on a lead already assigned to the CRM user you name below.</p>
+
+  <form id="f">
+    <div class="field">
+      <label for="assignedToName">Assigned to (CRM user name)</label>
+      <input type="text" id="assignedToName" required placeholder="e.g. Priya Sharma">
+    </div>
+    <div class="field">
+      <label for="customerName">Customer name</label>
+      <input type="text" id="customerName" required placeholder="e.g. John Doe">
+    </div>
+    <div class="field">
+      <label for="mobileNumber">Customer mobile number</label>
+      <input type="tel" id="mobileNumber" required placeholder="e.g. 9876543210">
+    </div>
+    <div class="field">
+      <label for="scheduledDate">Site visit date &amp; time</label>
+      <input type="datetime-local" id="scheduledDate" required>
+    </div>
+    <div class="field">
+      <label for="notes">Notes</label>
+      <textarea id="notes" placeholder="Anything the visit needs on record"></textarea>
+    </div>
+    <label class="row-check">
+      <input type="checkbox" id="dryRun" checked>
+      Dry run — resolve everything but don't actually update Leadrat
+    </label>
+    <div class="actions">
+      <button type="submit" class="primary" id="submitBtn">Update lead</button>
+      <button type="button" class="ghost" id="clearBtn">Clear result</button>
+    </div>
+    <p class="hint" id="statusLine"></p>
+  </form>
+
+  <div class="result" id="result"></div>
+</div>
+
+<script>
+// ---- CONFIG: fill these in after you deploy Code.gs as a Web App ----
+const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz-vsPECs2MvOW8KzbEvHGNzy_L0SpPUnG7XhoyTrIIncrCNOwEHzE8pOosh60LSz1Qqg/exec';
+const APP_SECRET = 'hYwpG8NtI9SkegrQ'; // must match APP_SHARED_SECRET in Code.gs
+// -----------------------------------------------------------------------
+
+const form = document.getElementById('f');
+const resultEl = document.getElementById('result');
+const submitBtn = document.getElementById('submitBtn');
+const statusLine = document.getElementById('statusLine');
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  resultEl.innerHTML = '';
+  statusLine.textContent = '';
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  if (GAS_WEB_APP_URL.indexOf('PASTE_YOUR') === 0) {
+    renderError_('Set GAS_WEB_APP_URL at the top of this file to your deployed Apps Script Web App URL.');
+    return;
+  }
+
+  const payload = {
+    appSecret: APP_SECRET,
+    assignedToName: document.getElementById('assignedToName').value.trim(),
+    customerName: document.getElementById('customerName').value.trim(),
+    mobileNumber: document.getElementById('mobileNumber').value.trim(),
+    scheduledDate: document.getElementById('scheduledDate').value,
+    notes: document.getElementById('notes').value.trim(),
+    dryRun: document.getElementById('dryRun').checked
+  };
+
+  submitBtn.disabled = true;
+  statusLine.textContent = 'Calling Leadrat…';
+  resultEl.innerHTML = '';
+
+  try {
+    // text/plain avoids a CORS preflight against the Apps Script endpoint.
+    const res = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    statusLine.textContent = '';
+    renderResult_(data);
+  } catch (err) {
+    statusLine.textContent = '';
+    renderError_('Request failed: ' + err.message + ' (check the Web App URL, deployment access setting, and browser console).');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+function renderResult_(data) {
+  if (!data.succeeded) {
+    renderError_(data.error || 'Unknown error.', data);
+    return;
+  }
+  const dryTag = data.dryRun ? ' <em>(dry run — nothing was sent)</em>' : '';
+  resultEl.innerHTML = `
+    <div class="card ok">
+      <h2>${data.dryRun ? 'Resolved successfully' : 'Lead updated'}${dryTag}</h2>
+      Matched user <strong>${escapeHtml_(data.matched.user.name || '')}</strong> to lead
+      <strong>${escapeHtml_(data.matched.lead.name || '')}</strong> (${escapeHtml_(data.matched.lead.contactNo || '')}).<br>
+      Status resolved as: <strong>${escapeHtml_((data.matched.statusResolvedAs || []).join(' → '))}</strong>
+    </div>
+    <pre>${escapeHtml_(JSON.stringify(data, null, 2))}</pre>
+  `;
+}
+
+function renderError_(message, data) {
+  resultEl.innerHTML = `
+    <div class="card err"><h2>Couldn't update the lead</h2>${escapeHtml_(message)}</div>
+    ${data ? `<pre>${escapeHtml_(JSON.stringify(data, null, 2))}</pre>` : ''}
+  `;
+}
+
+function escapeHtml_(str) {
+  return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+</script>
+</body>
+</html>
