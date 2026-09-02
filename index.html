@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Leadrat — Schedule Site Visit updater (test)</title>
+<title>Leadrat — lead status updater (test)</title>
 <style>
   :root{
     --ink:#1c2126;
@@ -36,11 +37,12 @@
     margin:0 0 5px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   .field{margin-bottom:16px;}
-  input[type=text], input[type=tel], input[type=datetime-local], textarea{
+  input[type=text], input[type=tel], input[type=datetime-local], textarea, select{
     width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:2px;
     font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     background:#fdfdfc; color:var(--ink);
   }
+  select:disabled{color:#9aa1a8; background:#f4f3f0;}
   input:focus, textarea:focus{outline:2px solid var(--accent); outline-offset:1px;}
   textarea{min-height:64px; resize:vertical;}
   .row-check{
@@ -76,8 +78,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Schedule a site visit</h1>
-  <p class="sub">Updates a lead in Leadrat to <strong>Schedule site visit → First Visit</strong>. Only works on a lead already assigned to the CRM user you name below.</p>
+  <h1>Update a lead</h1>
+  <p class="sub">Moves a lead to a status/sub-status you pick below. Only works on a lead already assigned to the CRM user you name below.</p>
 
   <form id="f">
     <div class="field">
@@ -93,7 +95,15 @@
       <input type="tel" id="mobileNumber" required placeholder="e.g. 9876543210">
     </div>
     <div class="field">
-      <label for="scheduledDate">Site visit date &amp; time</label>
+      <label for="statusKey">Update status to</label>
+      <select id="statusKey" required><option value="">Loading options…</option></select>
+    </div>
+    <div class="field">
+      <label for="subStatusKey">Sub-status</label>
+      <select id="subStatusKey" required disabled><option value="">Choose a status first</option></select>
+    </div>
+    <div class="field">
+      <label for="scheduledDate">Date &amp; time</label>
       <input type="datetime-local" id="scheduledDate" required>
     </div>
     <div class="field">
@@ -120,10 +130,45 @@ const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz-vsPECs2MvOW8
 const APP_SECRET = 'hYwpG8NtI9SkegrQ'; // must match APP_SHARED_SECRET in Code.gs
 // -----------------------------------------------------------------------
 
+
 const form = document.getElementById('f');
 const resultEl = document.getElementById('result');
 const submitBtn = document.getElementById('submitBtn');
 const statusLine = document.getElementById('statusLine');
+const statusKeySelect = document.getElementById('statusKey');
+const subStatusKeySelect = document.getElementById('subStatusKey');
+
+let permittedOptions = null;
+
+async function loadPermittedOptions_() {
+  if (GAS_WEB_APP_URL.indexOf('PASTE_YOUR') === 0) {
+    statusKeySelect.innerHTML = '<option value="">Set GAS_WEB_APP_URL first</option>';
+    return;
+  }
+  try {
+    const res = await fetch(GAS_WEB_APP_URL + '?options=1');
+    const data = await res.json();
+    permittedOptions = data.permittedStatusOptions;
+    statusKeySelect.innerHTML = '<option value="">Choose…</option>' + Object.keys(permittedOptions)
+      .map(key => `<option value="${key}">${escapeHtml_(permittedOptions[key].label)}</option>`).join('');
+  } catch (err) {
+    statusKeySelect.innerHTML = '<option value="">Could not load — check backend URL</option>';
+  }
+}
+
+statusKeySelect.addEventListener('change', () => {
+  const opt = permittedOptions && permittedOptions[statusKeySelect.value];
+  if (!opt) {
+    subStatusKeySelect.innerHTML = '<option value="">Choose a status first</option>';
+    subStatusKeySelect.disabled = true;
+    return;
+  }
+  subStatusKeySelect.innerHTML = Object.keys(opt.subStatuses)
+    .map(key => `<option value="${key}">${escapeHtml_(opt.subStatuses[key].label)}</option>`).join('');
+  subStatusKeySelect.disabled = false;
+});
+
+loadPermittedOptions_();
 
 document.getElementById('clearBtn').addEventListener('click', () => {
   resultEl.innerHTML = '';
@@ -143,6 +188,8 @@ form.addEventListener('submit', async (e) => {
     assignedToName: document.getElementById('assignedToName').value.trim(),
     customerName: document.getElementById('customerName').value.trim(),
     mobileNumber: document.getElementById('mobileNumber').value.trim(),
+    statusKey: statusKeySelect.value,
+    subStatusKey: subStatusKeySelect.value,
     scheduledDate: document.getElementById('scheduledDate').value,
     notes: document.getElementById('notes').value.trim(),
     dryRun: document.getElementById('dryRun').checked
