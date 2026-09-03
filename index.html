@@ -130,7 +130,6 @@ const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbz-vsPECs2MvOW8
 const APP_SECRET = 'hYwpG8NtI9SkegrQ'; // must match APP_SHARED_SECRET in Code.gs
 // -----------------------------------------------------------------------
 
-
 const form = document.getElementById('f');
 const resultEl = document.getElementById('result');
 const submitBtn = document.getElementById('submitBtn');
@@ -235,9 +234,30 @@ function renderResult_(data) {
       <strong>${escapeHtml_(data.matched.lead.name || '')}</strong> (${escapeHtml_(data.matched.lead.contactNo || '')}).<br>
       Status resolved as: <strong>${escapeHtml_((data.matched.statusResolvedAs || []).join(' → '))}</strong>
     </div>
+    ${renderAppointmentDiff_(data.appointmentDiff)}
     <pre>${escapeHtml_(JSON.stringify({ payloadToSend: data.payloadToSend, leadratResponse: data.leadratResponse }, null, 2))}</pre>
     ${debugHtml}
   `;
+}
+
+// Type 1 = meeting, Type 2 = site visit, per what we've observed so far.
+function appointmentTypeLabel_(type) {
+  return type === 1 ? 'Meeting' : type === 2 ? 'Site visit' : ('Type ' + type);
+}
+
+function renderAppointmentDiff_(diff) {
+  if (!diff) return '';
+  const created = diff.newlyCreated || [];
+  const flipped = diff.flippedIsDone || [];
+  if (!created.length && !flipped.length) return '';
+  const rows = [];
+  created.forEach(a => rows.push(`<li>New ${appointmentTypeLabel_(a.type)} appointment created, isDone: <strong>${a.isDone}</strong></li>`));
+  flipped.forEach(a => rows.push(`<li><strong>${appointmentTypeLabel_(a.type)} appointment flipped:</strong> isDone went from ${a.isDoneBefore} → <strong>${a.isDoneAfter}</strong> (id ...${a.id.slice(-6)})</li>`));
+  const flag = flipped.length ? 'err' : 'ok';
+  return `<div class="card ${flag}">
+    <h2>Appointment change right after update</h2>
+    <ul style="margin:4px 0 0; padding-left:18px;">${rows.join('')}</ul>
+  </div>`;
 }
 
 function renderError_(message, data) {
